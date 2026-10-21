@@ -1,0 +1,25 @@
+[project]
+name = "hinton-kd"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "shadosider", email = "1439107161@qq.com" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "matplotlib>=3.11.2",
+    "torch>=2.14.1",
+    "torchvision>=0.29.1",
+]
+
+[project.scripts]
+hinton-kd = "hinton_kd:main"
+
+[build-system]
+requires = ["uv_build>=0.13.1,<0.14.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-root = ""
+module-name = "src"
