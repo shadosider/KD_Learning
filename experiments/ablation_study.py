@@ -9,12 +9,12 @@ from matplotlib.colors import LinearSegmentedColormap, Normalize
 from torch.optim import Adam
 
 from kdlib.data import get_mnist_loaders
+from kdlib.losses import make_kd_loss_fn
 from kdlib.models import create_student, create_teacher
 from kdlib.paths import PROJECT_ROOT
 from kdlib.training import (
     get_device,
     load_checkpoint,
-    make_kd_loss_fn,
     run_training,
     set_seed,
 )

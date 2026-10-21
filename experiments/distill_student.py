@@ -1,11 +1,11 @@
 from torch.optim import Adam
 
 from kdlib.data import get_mnist_loaders
+from kdlib.losses import make_kd_loss_fn
 from kdlib.models import create_teacher, create_student
 from kdlib.training import (
     get_device,
     load_checkpoint,
-    make_kd_loss_fn,
     run_training,
     save_checkpoint,
     set_seed,

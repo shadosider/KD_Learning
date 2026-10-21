@@ -1,9 +1,7 @@
 import random
 
 import torch
-import torch.nn.functional as F
 
-from .losses import distillation_loss
 from .paths import checkpoint_path
 
 
@@ -20,34 +18,6 @@ def get_device() -> torch.device:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("Device:", device)
     return device
-
-
-def ce_loss_fn(model, images, labels):
-    """硬标签分类损失,返回 (loss, logits),便于训练循环统计准确率。"""
-    logits = model(images)
-    return F.cross_entropy(logits, labels), logits
-
-
-def make_kd_loss_fn(teacher, temperature: float = 4.0, alpha: float = 0.5):
-    """构造蒸馏损失函数:软目标来自冻结的 teacher,返回 (loss, student_logits)。"""
-
-    def loss_fn(model, images, labels):
-        # Teacher 只提供软目标,不参与梯度更新
-        with torch.no_grad():
-            teacher_logits = teacher(images)
-
-        student_logits = model(images)
-
-        loss, _, _ = distillation_loss(
-            student_logits=student_logits,
-            teacher_logits=teacher_logits,
-            labels=labels,
-            temperature=temperature,
-            alpha=alpha,
-        )
-        return loss, student_logits
-
-    return loss_fn
 
 
 def train_one_epoch(model, loader, optimizer, loss_fn, device):
