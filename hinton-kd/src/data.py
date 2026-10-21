@@ -2,9 +2,11 @@
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 
+from .paths import DATA_DIR
+
 
 def get_mnist_loaders(
-    data_dir: str = "../data",
+    data_dir=DATA_DIR,
     batch_size: int = 128,
     num_workers: int = 0,
 ):
