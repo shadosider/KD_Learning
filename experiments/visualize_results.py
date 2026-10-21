@@ -6,11 +6,11 @@ matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
 
-from src.data import get_mnist_loaders
-from src.metrics import count_parameters, measure_latency
-from src.models import create_student, create_teacher
-from src.paths import PROJECT_ROOT, checkpoint_path
-from src.training import evaluate, get_device, load_checkpoint, set_seed
+from kdlib.data import get_mnist_loaders
+from kdlib.metrics import count_parameters, measure_latency
+from kdlib.models import create_student, create_teacher
+from kdlib.paths import PROJECT_ROOT, checkpoint_path
+from kdlib.training import evaluate, get_device, load_checkpoint, set_seed
 
 # (显示名, 权重文件, 构造器)
 MODELS = [

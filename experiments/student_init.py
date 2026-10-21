@@ -1,5 +1,5 @@
-from src.models import create_student
-from src.training import save_checkpoint, set_seed
+from kdlib.models import create_student
+from kdlib.training import save_checkpoint, set_seed
 
 
 def main():

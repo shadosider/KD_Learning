@@ -8,10 +8,10 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap, Normalize
 from torch.optim import Adam
 
-from src.data import get_mnist_loaders
-from src.models import create_student, create_teacher
-from src.paths import PROJECT_ROOT
-from src.training import (
+from kdlib.data import get_mnist_loaders
+from kdlib.models import create_student, create_teacher
+from kdlib.paths import PROJECT_ROOT
+from kdlib.training import (
     get_device,
     load_checkpoint,
     make_kd_loss_fn,

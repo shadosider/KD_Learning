@@ -1,7 +1,7 @@
 
 import torch
 
-from src.data import get_mnist_loaders
+from kdlib.data import get_mnist_loaders
 
 
 def main():

@@ -1,8 +1,8 @@
 from torch.optim import Adam
 
-from src.data import get_mnist_loaders
-from src.models import create_teacher, create_student
-from src.training import (
+from kdlib.data import get_mnist_loaders
+from kdlib.models import create_teacher, create_student
+from kdlib.training import (
     get_device,
     load_checkpoint,
     make_kd_loss_fn,
