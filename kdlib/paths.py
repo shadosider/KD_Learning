@@ -11,3 +11,18 @@ CHECKPOINT_DIR = PROJECT_ROOT / "outputs" / "checkpoints"
 def checkpoint_path(name: str) -> Path:
     """返回 checkpoint 的绝对路径。"""
     return CHECKPOINT_DIR / name
+
+
+def deep_suffix(deep: bool = False) -> str:
+    """深度模式的文件名后缀,用于区分浅/深 teacher 的产物。"""
+    return "_deep" if deep else ""
+
+
+def teacher_checkpoint(deep: bool = False) -> str:
+    """teacher 权重文件名(深模式带 _deep 后缀)。"""
+    return f"teacher{deep_suffix(deep)}.pt"
+
+
+def kd_checkpoint(deep: bool = False) -> str:
+    """蒸馏学生权重文件名(深模式带 _deep 后缀)。"""
+    return f"student_kd{deep_suffix(deep)}.pt"

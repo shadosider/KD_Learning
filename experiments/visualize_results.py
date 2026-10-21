@@ -1,3 +1,4 @@
+import argparse
 import json
 
 import matplotlib
@@ -9,15 +10,25 @@ import matplotlib.pyplot as plt
 from kdlib.data import get_mnist_loaders
 from kdlib.metrics import count_parameters, measure_latency
 from kdlib.models import create_student, create_teacher
-from kdlib.paths import PROJECT_ROOT, checkpoint_path
+from kdlib.paths import (
+    PROJECT_ROOT,
+    checkpoint_path,
+    deep_suffix,
+    kd_checkpoint,
+    teacher_checkpoint,
+)
 from kdlib.training import evaluate, get_device, load_checkpoint, set_seed
 
-# (显示名, 权重文件, 构造器)
-MODELS = [
-    ("Teacher (512)", "teacher.pt", create_teacher),
-    ("Student (64)", "student_baseline.pt", create_student),
-    ("Student KD (64)", "student_kd.pt", create_student),
-]
+
+def build_models(deep):
+    """按 deep 模式返回 (显示名, 权重文件, 构造器) 列表。"""
+    teacher_label = "Teacher (deep)" if deep else "Teacher (512)"
+    kd_label = "Student KD (64, deep T)" if deep else "Student KD (64)"
+    return [
+        (teacher_label, teacher_checkpoint(deep), lambda: create_teacher(deep=deep)),
+        ("Student (64)", "student_baseline.pt", create_student),
+        (kd_label, kd_checkpoint(deep), create_student),
+    ]
 
 # 类别色(浅色模式),固定顺序:blue / orange / aqua
 COLORS = ["#2a78d6", "#eb6834", "#1baf7a"]
@@ -30,11 +41,11 @@ MUTED_INK = "#898781"
 GRIDLINE = "#e1e0d9"
 
 
-def collect_metrics(device):
+def collect_metrics(device, models):
     _, test_loader = get_mnist_loaders(batch_size=128)
 
     results = {}
-    for name, ckpt, factory in MODELS:
+    for name, ckpt, factory in models:
         model = factory().to(device)
         load_checkpoint(model, ckpt, device)
 
@@ -52,8 +63,8 @@ def collect_metrics(device):
     return results
 
 
-def make_figure(results, figure_path):
-    names = [name for name, _, _ in MODELS]
+def make_figure(results, figure_path, models):
+    names = [name for name, _, _ in models]
     y = list(range(len(names)))[::-1]  # 顶部为 Teacher
 
     panels = [
@@ -118,19 +129,24 @@ def make_figure(results, figure_path):
 
 
 def main():
+    parser = argparse.ArgumentParser(description="对照可视化(准确率/参数量/延迟)")
+    parser.add_argument("--deep", action="store_true", help="读取深模式产物(_deep 后缀)")
+    args = parser.parse_args()
+
     set_seed(42)
     device = get_device()
 
-    results = collect_metrics(device)
+    models = build_models(args.deep)
+    results = collect_metrics(device, models)
 
     # 保存数值结果,便于复现与查阅
-    results_path = PROJECT_ROOT / "outputs" / "results.json"
+    results_path = PROJECT_ROOT / "outputs" / f"results{deep_suffix(args.deep)}.json"
     results_path.parent.mkdir(parents=True, exist_ok=True)
     results_path.write_text(json.dumps(results, indent=2, ensure_ascii=False))
 
     print("\n结果汇总:")
     print("模型            | 测试准确率 | 参数量   | 权重文件   | 每批延迟")
-    for name, ckpt, _ in MODELS:
+    for name, ckpt, _ in models:
         r = results[name]
         print(
             f"{name:<15} | {r['accuracy'] * 100:.2f}%     | "
@@ -138,8 +154,8 @@ def main():
             f"{r['latency_ms_per_batch']:.4f} ms"
         )
 
-    figure_path = PROJECT_ROOT / "outputs" / "figures" / "results_comparison.png"
-    make_figure(results, figure_path)
+    figure_path = PROJECT_ROOT / "outputs" / "figures" / f"results_comparison{deep_suffix(args.deep)}.png"
+    make_figure(results, figure_path, models)
     print("Results saved to:", results_path)
 
 

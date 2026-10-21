@@ -1,3 +1,4 @@
+import argparse
 import json
 
 import matplotlib
@@ -11,7 +12,7 @@ from torch.optim import Adam
 from kdlib.data import get_mnist_loaders
 from kdlib.losses import make_kd_loss_fn
 from kdlib.models import create_student, create_teacher
-from kdlib.paths import PROJECT_ROOT
+from kdlib.paths import PROJECT_ROOT, deep_suffix, teacher_checkpoint
 from kdlib.training import (
     get_device,
     load_checkpoint,
@@ -174,20 +175,24 @@ def load_baseline_accuracy():
 
 
 def main():
+    parser = argparse.ArgumentParser(description="温度/α 消融实验")
+    parser.add_argument("--deep", action="store_true", help="使用深 teacher 并写 _deep 后缀产物")
+    args = parser.parse_args()
+
     set_seed(42)
     device = get_device()
 
     train_loader, test_loader = get_mnist_loaders(batch_size=128)
 
     # 加载冻结的 teacher
-    teacher = create_teacher().to(device)
-    load_checkpoint(teacher, "teacher.pt", device)
+    teacher = create_teacher(deep=args.deep).to(device)
+    load_checkpoint(teacher, teacher_checkpoint(args.deep), device)
     teacher.eval()
 
     matrix, records = run_sweep(device, train_loader, test_loader, teacher)
 
     # 保存原始数据
-    results_path = PROJECT_ROOT / "outputs" / "ablation_results.json"
+    results_path = PROJECT_ROOT / "outputs" / f"ablation_results{deep_suffix(args.deep)}.json"
     results_path.parent.mkdir(parents=True, exist_ok=True)
     results_path.write_text(json.dumps(records, indent=2, ensure_ascii=False))
 
@@ -201,7 +206,7 @@ def main():
     if baseline_acc is not None:
         print(f"基线(α=0, 无蒸馏): {baseline_acc:.4%}")
 
-    figure_path = PROJECT_ROOT / "outputs" / "figures" / "ablation_heatmap.png"
+    figure_path = PROJECT_ROOT / "outputs" / "figures" / f"ablation_heatmap{deep_suffix(args.deep)}.png"
     plot_ablation(matrix, baseline_acc, figure_path)
     print("Results saved to:", results_path)
 
