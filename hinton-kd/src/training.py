@@ -92,7 +92,7 @@ def evaluate(model, loader, device):
     return total_correct / total_samples
 
 
-def run_training(model, train_loader, test_loader, loss_fn, optimizer, epochs, device):
+def run_training(model, train_loader, test_loader, loss_fn, optimizer, epochs, device, verbose=True):
     """训练并逐 epoch 评估,打印损失与准确率,返回最终测试准确率。"""
     for epoch in range(epochs):
         train_loss, train_acc = train_one_epoch(
@@ -100,12 +100,13 @@ def run_training(model, train_loader, test_loader, loss_fn, optimizer, epochs, d
         )
         test_acc = evaluate(model, test_loader, device)
 
-        print(
-            f"Epoch [{epoch + 1}/{epochs}] "
-            f"loss={train_loss:.4f} "
-            f"train_acc={train_acc:.4%} "
-            f"test_acc={test_acc:.4%}"
-        )
+        if verbose:
+            print(
+                f"Epoch [{epoch + 1}/{epochs}] "
+                f"loss={train_loss:.4f} "
+                f"train_acc={train_acc:.4%} "
+                f"test_acc={test_acc:.4%}"
+            )
 
     return test_acc
 
