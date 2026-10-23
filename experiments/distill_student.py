@@ -2,6 +2,7 @@ import argparse
 
 from torch.optim import Adam
 
+from kdlib.config import CONFIG
 from kdlib.data import get_mnist_loaders
 from kdlib.losses import make_kd_loss_fn
 from kdlib.models import create_teacher, create_student
@@ -20,10 +21,10 @@ def main():
     parser.add_argument("--deep", action="store_true", help="使用深 teacher 蒸馏,写 _deep 后缀产物")
     args = parser.parse_args()
 
-    set_seed(42)
+    set_seed(CONFIG.seed)
     device = get_device()
 
-    train_loader, test_loader = get_mnist_loaders(batch_size=128)
+    train_loader, test_loader = get_mnist_loaders(batch_size=CONFIG.batch_size)
 
     # 加载已经训练好的 Teacher,只提供软目标,不更新参数
     teacher = create_teacher(deep=args.deep).to(device)
@@ -34,9 +35,11 @@ def main():
     student = create_student().to(device)
     load_checkpoint(student, "student_init.pt", device)
 
-    optimizer = Adam(student.parameters(), lr=1e-3)
+    optimizer = Adam(student.parameters(), lr=CONFIG.learning_rate)
 
-    loss_fn = make_kd_loss_fn(teacher, temperature=4.0, alpha=0.5)
+    loss_fn = make_kd_loss_fn(
+        teacher, temperature=CONFIG.kd_temperature, alpha=CONFIG.kd_alpha
+    )
 
     run_training(
         model=student,
@@ -44,7 +47,7 @@ def main():
         test_loader=test_loader,
         loss_fn=loss_fn,
         optimizer=optimizer,
-        epochs=5,
+        epochs=CONFIG.kd_epochs,
         device=device,
     )
 

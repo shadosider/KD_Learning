@@ -1,10 +1,11 @@
+from kdlib.config import CONFIG
 from kdlib.models import create_student
 from kdlib.training import save_checkpoint, set_seed
 
 
 def main():
     # 固定随机种子,保证所有学生模型从同一初始权重出发
-    set_seed(42)
+    set_seed(CONFIG.seed)
 
     student = create_student()
 

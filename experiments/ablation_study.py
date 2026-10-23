@@ -9,6 +9,8 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap, Normalize
 from torch.optim import Adam
 
+from kdlib.cache import read_if_fresh, write_result
+from kdlib.config import CONFIG
 from kdlib.data import get_mnist_loaders
 from kdlib.losses import make_kd_loss_fn
 from kdlib.models import create_student, create_teacher
@@ -20,9 +22,9 @@ from kdlib.training import (
     set_seed,
 )
 
-TEMPERATURES = [1, 2, 4, 8, 20]
-ALPHAS = [0.1, 0.3, 0.5, 0.7, 0.9]
-EPOCHS = 5
+TEMPERATURES = list(CONFIG.ablation_temperatures)
+ALPHAS = list(CONFIG.ablation_alphas)
+EPOCHS = CONFIG.ablation_epochs
 
 # 5 条温度线的类别色(浅色模式,固定顺序:blue/orange/aqua/yellow/magenta)
 LINE_COLORS = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4"]
@@ -48,11 +50,11 @@ def run_sweep(device, train_loader, test_loader, teacher):
     for i, T in enumerate(TEMPERATURES):
         for j, a in enumerate(ALPHAS):
             # 每个组合都从同一初始权重出发,数据顺序也一致
-            set_seed(42)
+            set_seed(CONFIG.seed)
             student = create_student().to(device)
             load_checkpoint(student, "student_init.pt", device)
 
-            optimizer = Adam(student.parameters(), lr=1e-3)
+            optimizer = Adam(student.parameters(), lr=CONFIG.learning_rate)
             loss_fn = make_kd_loss_fn(teacher, temperature=T, alpha=a)
 
             acc = run_training(
@@ -73,6 +75,15 @@ def run_sweep(device, train_loader, test_loader, teacher):
             print(f"[{done:>2}/{total}] T={T:>2}  α={a:.1f}  test_acc={acc:.4%}")
 
     return matrix, records
+
+
+def records_to_matrix(records):
+    """把 (temperature, alpha) 记录列表还原成 matrix,与记录顺序无关。"""
+    by_key = {(r["temperature"], r["alpha"]): r["accuracy"] for r in records}
+    return [
+        [by_key[(T, a)] for a in ALPHAS]
+        for T in TEMPERATURES
+    ]
 
 
 def text_color_for(rgba):
@@ -163,13 +174,14 @@ def plot_ablation(matrix, baseline_acc, figure_path):
     print("Figure saved to:", figure_path)
 
 
-def load_baseline_accuracy():
+def load_baseline_accuracy(deep: bool):
     """从之前的结果里读取基线学生(α=0)准确率,作为参考线。"""
-    results_path = PROJECT_ROOT / "outputs" / "results.json"
+    results_path = PROJECT_ROOT / "outputs" / f"results{deep_suffix(deep)}.json"
     if results_path.exists():
         data = json.loads(results_path.read_text())
-        for key, val in data.items():
-            if "Student (64)" in key and "KD" not in key:
+        results = data.get("results", data)  # 兼容旧格式(纯 dict)
+        for key, val in results.items():
+            if key.startswith("Student (") and "KD" not in key:
                 return val["accuracy"]
     return None
 
@@ -179,36 +191,52 @@ def main():
     parser.add_argument("--deep", action="store_true", help="使用深 teacher 并写 _deep 后缀产物")
     args = parser.parse_args()
 
-    set_seed(42)
-    device = get_device()
+    set_seed(CONFIG.seed)
 
-    train_loader, test_loader = get_mnist_loaders(batch_size=128)
-
-    # 加载冻结的 teacher
-    teacher = create_teacher(deep=args.deep).to(device)
-    load_checkpoint(teacher, teacher_checkpoint(args.deep), device)
-    teacher.eval()
-
-    matrix, records = run_sweep(device, train_loader, test_loader, teacher)
-
-    # 保存原始数据
     results_path = PROJECT_ROOT / "outputs" / f"ablation_results{deep_suffix(args.deep)}.json"
-    results_path.parent.mkdir(parents=True, exist_ok=True)
-    results_path.write_text(json.dumps(records, indent=2, ensure_ascii=False))
+    meta = {
+        "seed": CONFIG.seed,
+        "batch_size": CONFIG.batch_size,
+        "learning_rate": CONFIG.learning_rate,
+        "teacher_epochs": CONFIG.teacher_epochs,
+        "ablation_epochs": CONFIG.ablation_epochs,
+        "ablation_temperatures": list(CONFIG.ablation_temperatures),
+        "ablation_alphas": list(CONFIG.ablation_alphas),
+        "deep": args.deep,
+        "teacher_hidden_dims": create_teacher(deep=args.deep).hidden_dims,
+        "student_hidden_dims": create_student().hidden_dims,
+    }
 
-    # 汇总最好/最差组合
+    cached = read_if_fresh(results_path, meta)
+    if cached is not None and "records" in cached:
+        records = cached["records"]
+        matrix = records_to_matrix(records)
+        print(f"参数未变,复用已有结果: {results_path}")
+    else:
+        device = get_device()
+        train_loader, test_loader = get_mnist_loaders(batch_size=CONFIG.batch_size)
+
+        # 加载冻结的 teacher
+        teacher = create_teacher(deep=args.deep).to(device)
+        load_checkpoint(teacher, teacher_checkpoint(args.deep), device)
+        teacher.eval()
+
+        matrix, records = run_sweep(device, train_loader, test_loader, teacher)
+        write_result(results_path, meta, records=records)
+        print("Results saved to:", results_path)
+
+    # 汇总最好/最差组合(缓存命中与否都会打印)
     best = max(records, key=lambda r: r["accuracy"])
     worst = min(records, key=lambda r: r["accuracy"])
     print(f"\n最好: T={best['temperature']}, α={best['alpha']} -> {best['accuracy']:.4%}")
     print(f"最差: T={worst['temperature']}, α={worst['alpha']} -> {worst['accuracy']:.4%}")
 
-    baseline_acc = load_baseline_accuracy()
+    baseline_acc = load_baseline_accuracy(args.deep)
     if baseline_acc is not None:
         print(f"基线(α=0, 无蒸馏): {baseline_acc:.4%}")
 
     figure_path = PROJECT_ROOT / "outputs" / "figures" / f"ablation_heatmap{deep_suffix(args.deep)}.png"
     plot_ablation(matrix, baseline_acc, figure_path)
-    print("Results saved to:", results_path)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MNIST Knowledge Distillation — Temperature Effect</title>
+<script src="https://cdn.plot.ly/plotly-3.0.1.min.js"></script>
+<style>
+  :root {
+    --surface: #fcfcfb;
+    --primary: #0b0b0b;
+    --secondary: #52514e;
+    --muted: #898781;
+    --grid: #e1e0d9;
+    --bar-color: #2a78d6;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                 "Helvetica Neue", Arial, sans-serif;
+    background: var(--surface);
+    color: var(--primary);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 32px 16px 64px;
+  }
+
+  h1 {
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+
+  .subtitle {
+    color: var(--secondary);
+    font-size: 13px;
+    margin-bottom: 24px;
+  }
+
+  .card {
+    background: #fff;
+    border: 1px solid var(--grid);
+    border-radius: 10px;
+    padding: 24px 20px 28px;
+    max-width: 820px;
+    width: 100%;
+    box-shadow: 0 2px 8px rgba(0,0,0,.04);
+  }
+
+  #chart { width: 100%; height: 420px; }
+
+  .slider-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-top: 8px;
+    padding: 0 8px;
+  }
+
+  .slider-row label {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--secondary);
+    white-space: nowrap;
+  }
+
+  .slider-row input[type=range] {
+    flex: 1;
+    height: 6px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: linear-gradient(to right, #86b6ef, #0d366b);
+    border-radius: 3px;
+    outline: none;
+  }
+
+  .slider-row input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--bar-color);
+    cursor: pointer;
+    border: 2px solid #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,.25);
+  }
+
+  #t-value {
+    display: inline-block;
+    min-width: 52px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--primary);
+    text-align: right;
+  }
+
+  .info-row {
+    display: flex;
+    gap: 32px;
+    margin-top: 14px;
+    padding: 0 8px;
+    font-size: 13px;
+    color: var(--secondary);
+  }
+
+  .info-row span strong { color: var(--primary); }
+
+  .explain {
+    margin-top: 24px;
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.7;
+    padding: 0 8px;
+  }
+
+  .explain code {
+    background: #f3f2ef;
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 11.5px;
+  }
+</style>
+</head>
+<body>
+
+<h1>MNIST Knowledge Distillation</h1>
+<p class="subtitle">Effect of Temperature <em>T</em> on Softmax Probability Distribution</p>
+
+<div class="card">
+  <div id="chart"></div>
+
+  <div class="slider-row">
+    <label for="slider">Temperature T</label>
+    <input type="range" id="slider" min="0.2" max="8.0" value="1.0" step="0.1">
+    <span id="t-value">T = 1.0</span>
+  </div>
+
+  <div class="info-row">
+    <span>Top predicted class: <strong id="top-class">3</strong></span>
+    <span>P(digit 3) = <strong id="p3">—</strong></span>
+    <span>P(digit 8) = <strong id="p8">—</strong></span>
+  </div>
+
+  <div class="explain">
+    Example teacher logits for a <code>digit 3</code> image.<br>
+    Low <code>T</code> → distribution sharpens (one-hot like).<br>
+    High <code>T</code> → distribution softens, revealing "dark knowledge"
+    (e.g. digit 3 looks a bit like 8, confirmed by the teacher's secondary peak).
+    Hard labels lose this signal; soft targets preserve it.
+  </div>
+</div>
+
+<script>
+// ── Data ──────────────────────────────────────────────────────────
+const digits = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+const teacherLogits = [-1.0, -0.5, 0.2, 5.0, 0.0, 0.8, -0.8, -0.2, 2.2, -0.7];
+
+function softmaxT(logits, T) {
+  const scaled = logits.map(v => v / T);
+  const max = Math.max(...scaled);
+  const expVals = scaled.map(v => Math.exp(v - max));
+  const sum = expVals.reduce((a, b) => a + b, 0);
+  return expVals.map(v => v / sum);
+}
+
+// ── Plotly trace ──────────────────────────────────────────────────
+const trace = {
+  x: digits,
+  y: softmaxT(teacherLogits, 1.0),
+  type: "bar",
+  marker: { color: "#2a78d6", line: { width: 0 } },
+  width: 0.68,
+  text: softmaxT(teacherLogits, 1.0).map(v => v.toFixed(3)),
+  textposition: "outside",
+  textfont: { size: 11, color: "#52514e" },
+  hovertemplate: "digit %{x}<br>P = %{y:.4f}<extra></extra>",
+};
+
+const layout = {
+  xaxis: {
+    title: { text: "Digit class", font: { size: 13, color: "#52514e" } },
+    tickvals: digits,
+    ticktext: digits.map(String),
+    tickfont: { color: "#898781" },
+    gridcolor: "#e1e0d9",
+    linecolor: "#e1e0d9",
+    zeroline: false,
+  },
+  yaxis: {
+    title: { text: "Probability", font: { size: 13, color: "#52514e" } },
+    range: [0, 1.0],
+    tickformat: ".1f",
+    tickfont: { color: "#898781" },
+    gridcolor: "#e1e0d9",
+    linecolor: "#e1e0d9",
+    zeroline: false,
+  },
+  margin: { l: 52, r: 28, t: 12, b: 44 },
+  paper_bgcolor: "#fff",
+  plot_bgcolor: "#fff",
+  bargap: 0.22,
+  showlegend: false,
+};
+
+const config = { displayModeBar: false, responsive: true };
+
+Plotly.newPlot("chart", [trace], layout, config);
+
+// ── Slider ────────────────────────────────────────────────────────
+const slider = document.getElementById("slider");
+const tValEl = document.getElementById("t-value");
+const topClassEl = document.getElementById("top-class");
+const p3El = document.getElementById("p3");
+const p8El = document.getElementById("p8");
+
+
+function update(T) {
+  const probs = softmaxT(teacherLogits, T);
+  const topIdx = probs.indexOf(Math.max(...probs));
+
+  // 直接更新柱状图数据，不再执行逐帧动画
+  Plotly.restyle("chart", {
+    y: [probs],
+    text: [probs.map(v => v.toFixed(3))]
+  }, [0]);
+
+  // 同步更新文字信息
+  tValEl.textContent = `T = ${T.toFixed(1)}`;
+  topClassEl.textContent = topIdx;
+  p3El.textContent = probs[3].toFixed(3);
+  p8El.textContent = probs[8].toFixed(3);
+}
+
+
+slider.addEventListener("input", () => update(parseFloat(slider.value)));
+</script>
+
+</body>
+</html>

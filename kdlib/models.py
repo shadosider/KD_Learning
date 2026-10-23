@@ -23,6 +23,7 @@ class MNISTMLP(nn.Module):
         layers.append(nn.Linear(dims[-2], dims[-1]))
 
         self.network = nn.Sequential(*layers)
+        self.hidden_dims = list(hidden_dims)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.network(x)
@@ -40,5 +41,5 @@ def create_teacher(deep: bool = False) -> MNISTMLP:
 
 
 def create_student() -> MNISTMLP:
-    """构造 student,容量固定为 64,与 deep 模式无关。"""
-    return MNISTMLP(hidden_dims=[64])
+    """构造 student,容量固定为 16,与 deep 模式无关。"""
+    return MNISTMLP(hidden_dims=[16])

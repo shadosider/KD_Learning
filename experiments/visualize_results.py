@@ -1,5 +1,4 @@
 import argparse
-import json
 
 import matplotlib
 
@@ -7,6 +6,8 @@ matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
 
+from kdlib.cache import read_if_fresh, write_result
+from kdlib.config import CONFIG
 from kdlib.data import get_mnist_loaders
 from kdlib.metrics import count_parameters, measure_latency
 from kdlib.models import create_student, create_teacher
@@ -22,11 +23,12 @@ from kdlib.training import evaluate, get_device, load_checkpoint, set_seed
 
 def build_models(deep):
     """按 deep 模式返回 (显示名, 权重文件, 构造器) 列表。"""
+    student_width = create_student().hidden_dims[0]
     teacher_label = "Teacher (deep)" if deep else "Teacher (512)"
-    kd_label = "Student KD (64, deep T)" if deep else "Student KD (64)"
+    kd_label = f"Student KD ({student_width}, deep T)" if deep else f"Student KD ({student_width})"
     return [
         (teacher_label, teacher_checkpoint(deep), lambda: create_teacher(deep=deep)),
-        ("Student (64)", "student_baseline.pt", create_student),
+        (f"Student ({student_width})", "student_baseline.pt", create_student),
         (kd_label, kd_checkpoint(deep), create_student),
     ]
 
@@ -42,7 +44,7 @@ GRIDLINE = "#e1e0d9"
 
 
 def collect_metrics(device, models):
-    _, test_loader = get_mnist_loaders(batch_size=128)
+    _, test_loader = get_mnist_loaders(batch_size=CONFIG.batch_size)
 
     results = {}
     for name, ckpt, factory in models:
@@ -133,16 +135,33 @@ def main():
     parser.add_argument("--deep", action="store_true", help="读取深模式产物(_deep 后缀)")
     args = parser.parse_args()
 
-    set_seed(42)
-    device = get_device()
+    set_seed(CONFIG.seed)
 
     models = build_models(args.deep)
-    results = collect_metrics(device, models)
-
-    # 保存数值结果,便于复现与查阅
     results_path = PROJECT_ROOT / "outputs" / f"results{deep_suffix(args.deep)}.json"
-    results_path.parent.mkdir(parents=True, exist_ok=True)
-    results_path.write_text(json.dumps(results, indent=2, ensure_ascii=False))
+    meta = {
+        "deep": args.deep,
+        "batch_size": CONFIG.batch_size,
+        "teacher_hidden_dims": create_teacher(deep=args.deep).hidden_dims,
+        "student_hidden_dims": create_student().hidden_dims,
+        "checkpoints": {
+            ckpt: [
+                checkpoint_path(ckpt).stat().st_mtime_ns,
+                checkpoint_path(ckpt).stat().st_size,
+            ]
+            for _, ckpt, _ in models
+        },
+    }
+
+    cached = read_if_fresh(results_path, meta)
+    if cached is not None and "results" in cached:
+        results = cached["results"]
+        print(f"参数未变,复用已有结果: {results_path}")
+    else:
+        device = get_device()
+        results = collect_metrics(device, models)
+        write_result(results_path, meta, results=results)
+        print("Results saved to:", results_path)
 
     print("\n结果汇总:")
     print("模型            | 测试准确率 | 参数量   | 权重文件   | 每批延迟")
@@ -156,7 +175,6 @@ def main():
 
     figure_path = PROJECT_ROOT / "outputs" / "figures" / f"results_comparison{deep_suffix(args.deep)}.png"
     make_figure(results, figure_path, models)
-    print("Results saved to:", results_path)
 
 
 if __name__ == "__main__":

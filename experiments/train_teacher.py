@@ -2,6 +2,7 @@ import argparse
 
 from torch.optim import Adam
 
+from kdlib.config import CONFIG
 from kdlib.data import get_mnist_loaders
 from kdlib.losses import ce_loss_fn
 from kdlib.models import create_teacher
@@ -19,13 +20,13 @@ def main():
     parser.add_argument("--deep", action="store_true", help="使用深网络(512-256-128 + dropout)")
     args = parser.parse_args()
 
-    set_seed(42)
+    set_seed(CONFIG.seed)
     device = get_device()
 
-    train_loader, test_loader = get_mnist_loaders(batch_size=128)
+    train_loader, test_loader = get_mnist_loaders(batch_size=CONFIG.batch_size)
 
     model = create_teacher(deep=args.deep).to(device)
-    optimizer = Adam(model.parameters(), lr=1e-3)
+    optimizer = Adam(model.parameters(), lr=CONFIG.learning_rate)
 
     run_training(
         model=model,
@@ -33,7 +34,7 @@ def main():
         test_loader=test_loader,
         loss_fn=ce_loss_fn,
         optimizer=optimizer,
-        epochs=5,
+        epochs=CONFIG.teacher_epochs,
         device=device,
     )
 

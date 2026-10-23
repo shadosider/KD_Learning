@@ -1,5 +1,6 @@
 from torch.optim import Adam
 
+from kdlib.config import CONFIG
 from kdlib.data import get_mnist_loaders
 from kdlib.losses import ce_loss_fn
 from kdlib.models import create_student
@@ -13,17 +14,17 @@ from kdlib.training import (
 
 
 def main():
-    set_seed(42)
+    set_seed(CONFIG.seed)
     device = get_device()
 
-    train_loader, test_loader = get_mnist_loaders(batch_size=128)
+    train_loader, test_loader = get_mnist_loaders(batch_size=CONFIG.batch_size)
 
     model = create_student().to(device)
 
     # 导入统一的初始权重,保证与蒸馏学生从同一起点出发
     load_checkpoint(model, "student_init.pt", device)
 
-    optimizer = Adam(model.parameters(), lr=1e-3)
+    optimizer = Adam(model.parameters(), lr=CONFIG.learning_rate)
 
     run_training(
         model=model,
@@ -31,7 +32,7 @@ def main():
         test_loader=test_loader,
         loss_fn=ce_loss_fn,
         optimizer=optimizer,
-        epochs=5,
+        epochs=CONFIG.student_epochs,
         device=device,
     )
 
